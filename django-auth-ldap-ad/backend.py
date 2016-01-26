@@ -1,6 +1,7 @@
 
 import ldap,ldap.sasl
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import Group
+from django.contrib.auth import get_user_model
 
 import six
 
@@ -12,11 +13,11 @@ class LDAPBackendException( Exception ):
  Main class for handling the authentication
 """
 class LDAPBackend(object):
-   
+
     def authenticate(self, username=None, password=None):
         if hasattr( self, "ldap_settings") == False:
            self.ldap_settings = LDAPSettings()
-        
+
         if isinstance(self.ldap_settings.SERVER_URI, six.string_types):
           servers_urls = [self.ldap_settings.SERVER_URI]
         else:
@@ -34,54 +35,55 @@ class LDAPBackend(object):
                   return None
            else: #end up here with mock
               ldap_connection = self.ldap_connection
-              
+
            for key,value in self.ldap_settings.CONNECTION_OPTIONS.items():
               ldap_connection.set_option( key , value )
 
            # Do search
            try:
-              ldap_user_info = self.ldap_search_user( ldap_connection,username,password ) 
+              ldap_user_info = self.ldap_search_user( ldap_connection,username,password )
            except LDAPBackendException:
               return None
-           
+
            return self.get_local_user( username, ldap_user_info )
         return None
-        
+
     def get_user(self, user_id):
+        User=get_user_model()
         try:
             return User.objects.get(pk=user_id)
         except User.DoesNotExist:
             return None
-         
+
 
     def ldap_open_connection( self, ldap_url, username, password ):
          ldap_session = ldap.initialize(ldap_url,trace_level=self.ldap_settings.TRACE_LEVEL)
-         
+
          sasl_auth = ldap.sasl.sasl( {
                ldap.sasl.CB_AUTHNAME:username,
                ldap.sasl.CB_PASS    :password,
                },
                self.ldap_settings.SASL_MECH
             )
-         
+
          ldap_session.sasl_interactive_bind_s("", sasl_auth)
          return ldap_session
-    
+
     # Search for user, returns users info (dict)
     def ldap_search_user(self, connection, username, password ):
 
 
       result_set = []
-      ldap_result_id = connection.search( self.ldap_settings.SEARCH_DN , ldap.SCOPE_SUBTREE, self.ldap_settings.SEARCH_FILTER % { "user" : username }) 
+      ldap_result_id = connection.search( self.ldap_settings.SEARCH_DN , ldap.SCOPE_SUBTREE, self.ldap_settings.SEARCH_FILTER % { "user" : username })
       result_all_type, result_all_data = connection.result(ldap_result_id, 1)
       result_entries = []
       for result_type, result_data in result_all_data:
          if result_type != None:
             result_entries.append( result_data )
-            
+
       if len( result_entries ) == 0:
          raise LDAPBackendException("No entries found!")
-      
+
       if len( result_entries ) != 1:
          raise LDAPBackendException("More than one found!")
 
@@ -89,6 +91,7 @@ class LDAPBackend(object):
 
     def get_local_user(self, ldap_username, info ):
        username = ldap_username.lower()
+       User=get_user_model
        try:
           user = User.objects.get( username = username )
        except User.DoesNotExist:
@@ -99,23 +102,23 @@ class LDAPBackend(object):
        members_of = []
        for group in info.get('memberOf',[]):
           members_of.append( group.lower().split(",") )
-       
+
        # Set first_name or last_name or email ..
        for key, value in self.ldap_settings.USER_ATTR_MAP.items():
           if value in info:
              setattr( user, key, info[value][0] )
 
-       
+
 
        def check_for_membership( members_of, required_groups_options ):
          """ Check for membership in given groups,
              Parameter:
-                required_groups_options - can be string or list of strings. Each entry must 
+                required_groups_options - can be string or list of strings. Each entry must
                                        be comma-separeted groupnames """
-                                       
+
          if isinstance(required_groups_options, six.string_types):
            required_groups_options = [required_groups_options]
-          
+
          for required_groups in required_groups_options:
             required_groups = required_groups.lower().split(",")
             # check for all members of groups
@@ -130,7 +133,7 @@ class LDAPBackend(object):
        for wanted_property, requirements in self.ldap_settings.USER_FLAGS_BY_GROUP.items():
          has_property = check_for_membership( members_of, requirements )
          setattr( user, wanted_property, has_property )
-       
+
        # We need to do save before we can use the groups (for m2m binding)
        user.save()
        # user.groups.add( Group.objects.get(name = "ODAdmin"))
@@ -141,9 +144,9 @@ class LDAPBackend(object):
               user.groups.remove( Group.objects.get(name=wanted_group) )
        user.save()
        return user
-       
 
-         
+
+
 """ Load settings from Django settigns """
 class LDAPSettings(object):
     defaults = {

@@ -29,7 +29,7 @@ class LDAPBackend(object):
            if hasattr( self, "ldap_connection" ) == False:
               try:
                  ldap_connection = self.ldap_open_connection(server, username, password)
-              except ldap.SERVER_DOWN:
+              except (ldap.SERVER_DOWN,ldap.LDAPError):
                   continue
               except ldap.INVALID_CREDENTIALS:
                   return None
@@ -59,14 +59,26 @@ class LDAPBackend(object):
     def ldap_open_connection( self, ldap_url, username, password ):
          ldap_session = ldap.initialize(ldap_url,trace_level=self.ldap_settings.TRACE_LEVEL)
 
-         sasl_auth = ldap.sasl.sasl( {
-               ldap.sasl.CB_AUTHNAME:username,
-               ldap.sasl.CB_PASS    :password,
-               },
-               self.ldap_settings.SASL_MECH
-            )
+         #Options to transform the username supplied to a string that the AD might understand
 
-         ldap_session.sasl_interactive_bind_s("", sasl_auth)
+         if isinstance(self.ldap_settings.BIND_TRANSFOM,six.string_types):
+             username=self.ldap_settings.BIND_TRANSFORM.format(username)
+         elif callable(self.ldap_settings.BIND_TRANSFORM):
+             username=self.ldap_settings.BIND_TRANSFORM(username)
+
+         if self.ldap_settings.USE_SASL: # Default is SASL authentication
+             sasl_auth = ldap.sasl.sasl( {
+                   ldap.sasl.CB_AUTHNAME:username,
+                   ldap.sasl.CB_PASS    :password,
+                   },
+                   self.ldap_settings.SASL_MECH
+                )
+
+             ldap_session.sasl_interactive_bind_s("", sasl_auth)
+         else:
+             ldap_session.simple_bind(username,password)
+
+
          return ldap_session
 
     # Search for user, returns users info (dict)
@@ -158,7 +170,9 @@ class LDAPSettings(object):
         'TRACE_LEVEL' : 0,
         'SASL_MECH' : 'DIGEST-MD5',
         'SEARCH_DN'     : "DC=localdomain,DC=ORG",
-        'SEARCH_FILTER' : "(SAMAccountName=%(user)s)"
+        'SEARCH_FILTER' : "(SAMAccountName=%(user)s)",
+        'USE_SASL' : True,
+        'BIND_TRANSFORM': '{}'
     }
 
     def __init__(self, prefix='AUTH_LDAP_'):

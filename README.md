@@ -1,6 +1,15 @@
 django-auth-ldap-ad
 ===================
 
+## This Fork
+
+I (Gavin Burnell) forked this (very useful) backend to add support for the pluggable user model introduced in
+newer Django releases. Having done that, I've added back in support for non SASL, simple binds via a configuration option and for methods of transforming the uername from the user supplied one to something your AD might like better.
+
+This code has been  tested on Django 1.9.5 on Centos 7.
+
+What follows is the original README with a feww additions
+
 
 ## Why
 Django authentication backend for LDAP with Active Directory
@@ -58,6 +67,14 @@ Modify your settings to contain authentication backend, for example
          "email": "mail"
       }
 
+      # Turn on simple binds
+      AUTH_LDAP_USE_SASL = False
+
+      # Transform the supplied username to something different
+      AUTH_LDAP_BIND_TRANSFORM="{}@ds.leeds.ac.uk"
+      # Basically a format string where {} will become the username, but may also be a callable function taking
+      # The supplied username as its only parameter.
+
 # Troubleshooting
 
 I use [tcpdump](http://linux.die.net/man/1/tcpdump) for checking what happens on the wire and and [ldapsearch](http://linux.die.net/man/1/ldapsearch) to debug the AD server functionality.
@@ -81,6 +98,12 @@ For example:
 
 
 ## References
+
+#### BASE_TRANSFORM
+
+     Default : "{}"
+
+Maps the user supplied username to something that the AD will understand. The default does nothing in effect. May either be a string which is then used as a format string with the username as the only positional parameter, or a callable object which takes the username as its single parameter.
 
 #### CONNECTION_OPTIONS
 
@@ -129,6 +152,12 @@ Dictonary of 'django user attribute' : 'ldap user attribute' . Maps given ldap a
      Defaut : 0
      
 Set python LDAP trace level, see [python-ldap](http://www.python-ldap.org/doc/html/ldap.html)
+
+#### SASL_MECH
+
+     Default True
+
+Set to use a SASL Interactive bind (or simple bind if False )
 
 #### SASL_MECH
 

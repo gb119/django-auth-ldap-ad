@@ -29,7 +29,7 @@ class LDAPBackend(object):
            if hasattr( self, "ldap_connection" ) == False:
               try:
                  ldap_connection = self.ldap_open_connection(server, username, password)
-              except (ldap.SERVER_DOWN,ldap.LDAPError):
+              except (ldap.SERVER_DOWN,ldap.LDAPError) as e:
                   continue
               except ldap.INVALID_CREDENTIALS:
                   return None
@@ -61,7 +61,7 @@ class LDAPBackend(object):
 
          #Options to transform the username supplied to a string that the AD might understand
 
-         if isinstance(self.ldap_settings.BIND_TRANSFOM,six.string_types):
+         if isinstance(self.ldap_settings.BIND_TRANSFORM,six.string_types):
              username=self.ldap_settings.BIND_TRANSFORM.format(username)
          elif callable(self.ldap_settings.BIND_TRANSFORM):
              username=self.ldap_settings.BIND_TRANSFORM(username)
@@ -76,8 +76,7 @@ class LDAPBackend(object):
 
              ldap_session.sasl_interactive_bind_s("", sasl_auth)
          else:
-             ldap_session.simple_bind(username,password)
-
+             ldap_session.simple_bind_s(username,password)
 
          return ldap_session
 
@@ -103,7 +102,7 @@ class LDAPBackend(object):
 
     def get_local_user(self, ldap_username, info ):
        username = ldap_username.lower()
-       User=get_user_model
+       User=get_user_model()
        try:
           user = User.objects.get( username = username )
        except User.DoesNotExist:
